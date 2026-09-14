@@ -1,5 +1,6 @@
 const pool = require('../config/db');
 const xss = require('xss');
+const { emitNotification } = require('../utils/socket');
 
 exports.getConversations = async (req, res) => {
   try {
@@ -131,12 +132,20 @@ exports.sendMessage = async (req, res) => {
 
     const message = result.rows[0];
 
+    const senderInfo = await pool.query(
+      'SELECT username, display_name, avatar_url FROM users WHERE id = $1',
+      [req.session.userId]
+    );
+
     await pool.query('UPDATE conversations SET updated_at = NOW() WHERE id = $1', [conversationId]);
 
     const io = req.app.get('io');
     io.to(`conversation:${conversationId}`).emit('new_message', {
       ...message,
-      sender_id: req.session.userId
+      sender_id: req.session.userId,
+      sender_username: senderInfo.rows[0]?.username,
+      sender_display_name: senderInfo.rows[0]?.display_name,
+      sender_avatar: senderInfo.rows[0]?.avatar_url,
     });
 
     // Notify offline members
@@ -145,14 +154,15 @@ exports.sendMessage = async (req, res) => {
       [conversationId, req.session.userId]
     );
     for (const member of members.rows) {
-      await pool.query(
+      const notifResult = await pool.query(
         `INSERT INTO notifications (user_id, type, title, message, link)
-         VALUES ($1, 'message', 'New Message', $2, $3)`,
+         VALUES ($1, 'message', 'New Message', $2, $3) RETURNING *`,
         [member.user_id, `New message in conversation`, `/messages/${conversationId}`]
       );
+      emitNotification(io, member.user_id, notifResult.rows[0]);
     }
 
-    res.status(201).json({ message });
+    res.status(201).json({ message: { ...message, sender_username: senderInfo.rows[0]?.username, sender_display_name: senderInfo.rows[0]?.display_name } });
   } catch (err) {
     res.status(500).json({ error: 'Failed to send message' });
   }

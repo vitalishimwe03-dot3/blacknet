@@ -21,24 +21,12 @@
 
     <!-- Reports -->
     <div v-if="activeTab === 'reports'" class="space-y-3">
-      <div v-for="r in reports" :key="r.id" class="card p-4">
-        <div class="flex items-start justify-between">
-          <div>
-            <div class="flex items-center gap-2">
-              <span :class="getStatusBadge(r.status)" class="badge text-[10px]">{{ r.status }}</span>
-              <span class="text-xs text-bn-muted font-mono">{{ r.reason }}</span>
-            </div>
-            <p class="text-sm text-bn-text mt-1">{{ r.description || 'No description' }}</p>
-            <p class="text-xs text-bn-muted font-mono mt-1">
-              Reported by {{ r.reporter_username }} &middot; against {{ r.reported_username }} &middot; {{ timeAgo(r.created_at) }}
-            </p>
-          </div>
-          <div class="flex gap-1" v-if="r.status === 'pending'">
-            <button @click="updateReport(r.id, 'resolved')" class="text-xs text-bn-green hover:underline font-mono">Resolve</button>
-            <button @click="updateReport(r.id, 'dismissed')" class="text-xs text-bn-muted hover:underline font-mono">Dismiss</button>
-          </div>
-        </div>
-      </div>
+      <ReportCard
+        v-for="r in reports"
+        :key="r.id"
+        :report="r"
+        @update="updateReport"
+      />
       <div v-if="!reports.length" class="text-sm text-bn-muted font-mono text-center p-6">No reports</div>
     </div>
 
@@ -81,6 +69,7 @@
 import { ref, onMounted } from 'vue'
 import { timeAgo, formatDateTime, getInitials, getRoleBadge } from '../utils/helpers'
 import api from '../utils/api'
+import ReportCard from '../components/moderation/ReportCard.vue'
 
 const stats = ref(null)
 const reports = ref([])
@@ -97,11 +86,6 @@ const tabs = [
 function formatStatLabel(key) {
   const map = { users: 'Total Users', messages: 'Total Messages', pendingReports: 'Pending Reports', channels: 'Channels', forums: 'Forums', communities: 'Communities' }
   return map[key] || key
-}
-
-function getStatusBadge(status) {
-  const map = { pending: 'badge-yellow', reviewed: 'badge-cyan', resolved: 'badge-accent', dismissed: 'badge-red' }
-  return map[status] || 'badge-yellow'
 }
 
 async function fetchData() {

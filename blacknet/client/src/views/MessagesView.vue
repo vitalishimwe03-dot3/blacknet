@@ -50,39 +50,32 @@
 
         <!-- Messages -->
         <div ref="messagesContainer" class="flex-1 overflow-y-auto p-4 space-y-4">
-          <div v-for="msg in store.currentMessages" :key="msg.id"
-            class="flex gap-3" :class="{ 'flex-row-reverse': msg.sender_id === auth.user?.id }"
-          >
-            <div class="w-8 h-8 rounded-full bg-bn-surface flex items-center justify-center text-[10px] font-mono text-bn-accent border border-bn-border flex-shrink-0">
-              {{ getInitials(msg.sender_display_name || msg.sender_username || '?') }}
-            </div>
-            <div class="max-w-[70%]">
-              <div class="flex items-center gap-2 mb-1" :class="{ 'flex-row-reverse': msg.sender_id === auth.user?.id }">
-                <span class="text-xs font-medium text-bn-text">{{ msg.sender_display_name || msg.sender_username }}</span>
-                <span class="text-[10px] text-bn-muted font-mono">{{ formatShortTime(msg.created_at) }}</span>
-                <span v-if="msg.is_edited" class="text-[10px] text-bn-muted">(edited)</span>
-              </div>
-              <div class="p-3 rounded-xl text-sm" :class="msg.sender_id === auth.user?.id
-                ? 'bg-bn-accent/10 border border-bn-accent/20 text-bn-text'
-                : 'bg-bn-surface border border-bn-border text-bn-text'"
-              >
-                {{ msg.content }}
-              </div>
-            </div>
-          </div>
+          <MessageBubble
+            v-for="msg in store.currentMessages"
+            :key="msg.id"
+            :message="msg"
+            :own="msg.sender_id === auth.user?.id"
+            :can-edit="msg.sender_id === auth.user?.id"
+            @edit="startEdit(msg)"
+            @delete="deleteMessage(msg)"
+          />
 
           <div v-if="store.typingUsers?.length" class="text-xs text-bn-muted font-mono italic">
-            Someone is typing...
+            {{ store.typingUsers.join(', ') }} {{ store.typingUsers.length > 1 ? 'are' : 'is' }} typing...
           </div>
         </div>
 
         <!-- Input -->
         <div class="p-4 border-t border-bn-border">
+          <div v-if="editingMessage" class="mb-2 p-2 rounded-lg bg-bn-accent/5 border border-bn-accent/20 flex items-center justify-between">
+            <span class="text-xs text-bn-muted font-mono">Editing message</span>
+            <button @click="cancelEdit" class="text-bn-red text-xs font-mono">Cancel</button>
+          </div>
           <div class="flex gap-2">
-            <input v-model="messageText" @keydown.enter.prevent="sendMessage"
-              class="input flex-1 font-mono text-sm" placeholder="Type a message... (encrypted)" />
+            <input v-model="messageText" @input="onTyping" @keydown.enter.prevent="sendMessage"
+              class="input flex-1 font-mono text-sm" :placeholder="editingMessage ? 'Edit message...' : 'Type a message... (encrypted)'" />
             <button @click="sendMessage" :disabled="!messageText.trim()" class="btn-primary px-5">
-              Send
+              {{ editingMessage ? 'Save' : 'Send' }}
             </button>
           </div>
           <p class="text-[10px] text-bn-muted/50 font-mono mt-1">Messages are placeholder-encrypted. Do not send sensitive data.</p>
@@ -136,13 +129,14 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useMessagesStore } from '../stores/messages'
 import { getSocket } from '../utils/socket'
-import { timeAgo, formatShortTime, getInitials } from '../utils/helpers'
+import { timeAgo, getInitials } from '../utils/helpers'
 import api from '../utils/api'
+import MessageBubble from '../components/messaging/MessageBubble.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -157,6 +151,8 @@ const newChatSearch = ref('')
 const searchResults = ref([])
 const selectedUsers = ref([])
 const currentConversation = ref(null)
+const editingMessage = ref(null)
+let typingTimer = null
 
 const filteredConversations = computed(() => {
   if (!searchFilter.value) return store.conversations
@@ -165,10 +161,24 @@ const filteredConversations = computed(() => {
 
 function selectConversation(conv) {
   currentConversation.value = conv
+  const socket = getSocket()
+  if (store.currentConversation && store.currentConversation !== conv.id) {
+    socket.emit('leave_conversation', store.currentConversation)
+  }
+  socket.emit('join_conversation', conv.id)
   store.fetchMessages(conv.id)
   router.push(`/messages/${conv.id}`)
-  const socket = getSocket()
-  socket.emit('join_conversation', conv.id)
+}
+
+function openConversation(id) {
+  const conv = store.conversations.find(c => c.id === id)
+  if (conv) {
+    selectConversation(conv)
+  } else {
+    currentConversation.value = { id, name: 'Conversation' }
+    getSocket().emit('join_conversation', id)
+    store.fetchMessages(id)
+  }
 }
 
 function scrollToBottom() {
@@ -181,9 +191,45 @@ function scrollToBottom() {
 
 async function sendMessage() {
   if (!messageText.value.trim() || !currentConversation.value) return
+  if (editingMessage.value) {
+    await api.put(`/messages/message/${editingMessage.value.id}`, { content: messageText.value })
+    const socket = getSocket()
+    socket.emit('stop_typing', { conversationId: currentConversation.value.id })
+    cancelEdit()
+    return
+  }
   await store.sendMessage(currentConversation.value.id, messageText.value)
   messageText.value = ''
+  getSocket().emit('stop_typing', { conversationId: currentConversation.value.id })
   scrollToBottom()
+}
+
+function onTyping() {
+  const socket = getSocket()
+  if (!currentConversation.value) return
+  socket.emit('typing', {
+    conversationId: currentConversation.value.id,
+    username: auth.user?.username
+  })
+  clearTimeout(typingTimer)
+  typingTimer = setTimeout(() => {
+    socket.emit('stop_typing', { conversationId: currentConversation.value.id })
+  }, 2000)
+}
+
+function startEdit(msg) {
+  editingMessage.value = msg
+  messageText.value = msg.content
+}
+
+function cancelEdit() {
+  editingMessage.value = null
+  messageText.value = ''
+}
+
+async function deleteMessage(msg) {
+  if (!confirm('Delete this message?')) return
+  await api.delete(`/messages/message/${msg.id}`)
 }
 
 async function searchUsers() {
@@ -207,14 +253,37 @@ async function createChat() {
   selectConversation(conv)
 }
 
+function handleSearchQuery() {
+  const q = route.query?.search
+  if (q && typeof q === 'string' && q.length >= 2) {
+    api.get(`/messages/search?q=${encodeURIComponent(q)}`)
+      .then(({ data }) => {
+        if (data.messages?.length) {
+          openConversation(data.messages[0].conversation_id)
+        }
+      })
+      .catch(() => {})
+    router.replace({ path: route.path })
+  }
+}
+
 watch(() => store.currentMessages, scrollToBottom, { deep: true })
 
-onMounted(() => {
-  store.fetchConversations()
+watch(() => route.params.conversationId, (id) => {
+  if (id) openConversation(id)
+})
+
+onMounted(async () => {
+  const socket = getSocket()
+  await store.fetchConversations()
   if (route.params.conversationId) {
-    const conv = store.conversations.find(c => c.id === route.params.conversationId)
-    if (conv) selectConversation(conv)
+    openConversation(route.params.conversationId)
   }
+  handleSearchQuery()
+})
+
+onUnmounted(() => {
+  clearTimeout(typingTimer)
 })
 </script>
 

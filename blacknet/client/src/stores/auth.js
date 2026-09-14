@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import api from '../utils/api'
+import { disconnectSocket } from '../utils/socket'
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({
@@ -34,8 +35,12 @@ export const useAuthStore = defineStore('auth', {
       return data
     },
     async logout() {
-      await api.post('/auth/logout')
-      this.user = null
+      try {
+        await api.post('/auth/logout')
+      } finally {
+        disconnectSocket()
+        this.user = null
+      }
     },
     async updateProfile(updates) {
       const { data } = await api.put('/users/profile', updates)

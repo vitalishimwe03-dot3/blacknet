@@ -7,7 +7,9 @@
         <h1 class="text-2xl font-bold text-bn-text mb-1">
           Welcome back, <span class="text-gradient font-mono">{{ auth.user?.display_name || auth.user?.username }}</span>
         </h1>
-        <p class="text-bn-muted font-mono text-sm">System status: <span class="text-bn-green">OPERATIONAL</span> | Encryption: <span class="text-bn-cyan">AES-256</span></p>
+        <p class="text-bn-muted font-mono text-sm">
+          System status: <span class="text-bn-green">OPERATIONAL</span> | Encryption: <span class="text-bn-cyan">AES-256</span> <span class="text-bn-yellow">(placeholder)</span>
+        </p>
       </div>
     </div>
 
@@ -76,8 +78,14 @@
             <span class="badge badge-accent">E2E Placeholder</span>
           </div>
           <div class="flex justify-between items-center py-2 border-b border-bn-border/50">
-            <span class="text-sm text-bn-muted font-mono">Session</span>
-            <span class="text-sm text-bn-green font-mono">Active</span>
+            <span class="text-sm text-bn-muted font-mono">Unread messages</span>
+            <router-link to="/messages" class="text-sm font-mono" :class="statsData.unreadMessages > 0 ? 'text-bn-accent hover:underline' : 'text-bn-text'">
+              {{ statsData.unreadMessages }}
+            </router-link>
+          </div>
+          <div class="flex justify-between items-center py-2 border-b border-bn-border/50">
+            <span class="text-sm text-bn-muted font-mono">Unread notifications</span>
+            <span class="text-sm font-mono" :class="statsData.unreadNotifications > 0 ? 'text-bn-yellow' : 'text-bn-text'">{{ statsData.unreadNotifications }}</span>
           </div>
           <div class="flex justify-between items-center py-2">
             <span class="text-sm text-bn-muted font-mono">Role</span>
@@ -118,17 +126,37 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useAuthStore } from '../stores/auth'
+import { usePresenceStore } from '../stores/presence'
+import { getSocket } from '../utils/socket'
+import api from '../utils/api'
 
 const auth = useAuthStore()
+const presence = usePresenceStore()
+const statsData = ref({
+  onlineUsers: 0,
+  channels: 0,
+  forumThreads: 0,
+  forumPosts: 0,
+  communities: 0,
+  unreadNotifications: 0,
+  unreadMessages: 0,
+})
 
-const stats = [
-  { label: 'Users Online', value: '3', icon: '&#9679;', bgClass: 'bg-bn-green/10 text-bn-green' },
-  { label: 'Channels', value: '5', icon: '#', bgClass: 'bg-bn-cyan/10 text-bn-cyan' },
-  { label: 'Forum Posts', value: '14', icon: '&#9776;', bgClass: 'bg-bn-purple/10 text-bn-purple' },
-  { label: 'Communities', value: '2', icon: '&#9734;', bgClass: 'bg-bn-yellow/10 text-bn-yellow' },
-]
+const stats = computed(() => [
+  { label: 'Users Online', value: statsData.value.onlineUsers, icon: '&#9679;', bgClass: 'bg-bn-green/10 text-bn-green' },
+  { label: 'Channels', value: statsData.value.channels, icon: '#', bgClass: 'bg-bn-cyan/10 text-bn-cyan' },
+  { label: 'Forum Posts', value: statsData.value.forumPosts, icon: '&#9776;', bgClass: 'bg-bn-purple/10 text-bn-purple' },
+  { label: 'Communities', value: statsData.value.communities, icon: '&#9734;', bgClass: 'bg-bn-yellow/10 text-bn-yellow' },
+])
+
+async function fetchStats() {
+  try {
+    const { data } = await api.get('/dashboard/stats')
+    statsData.value = data.stats
+  } catch (e) { console.error(e) }
+}
 
 const roleBadgeClass = computed(() => {
   const map = { admin: 'badge-red', moderator: 'badge-yellow', user: 'badge-accent' }
@@ -143,4 +171,10 @@ const rules = [
   'All users must respect community guidelines and moderator decisions',
   'Report abuse immediately through the built-in reporting system',
 ]
+
+onMounted(() => {
+  getSocket()
+  fetchStats()
+  presence.fetchOnlineUsers()
+})
 </script>

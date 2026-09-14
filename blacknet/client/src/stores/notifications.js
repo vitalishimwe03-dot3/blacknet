@@ -28,6 +28,11 @@ export const useNotificationStore = defineStore('notifications', {
       await api.put('/notifications/read-all')
       this.notifications.forEach(n => n.is_read = true)
       this.unreadCount = 0
+    },
+    pushNotification(notification) {
+      this.notifications.unshift(notification)
+      if (this.notifications.length > 50) this.notifications.pop()
+      if (!notification.is_read) this.unreadCount += 1
     }
   }
 })

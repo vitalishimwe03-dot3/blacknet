@@ -197,6 +197,30 @@ async function runTests() {
   const count = await makeRequest('GET', '/api/notifications/unread-count', null, cookies);
   check('notification unread count', count.status === 200);
 
+  // --- Dashboard ---
+  const dash = await makeRequest('GET', '/api/dashboard/stats', null, cookies);
+  check('dashboard stats', dash.status === 200 && typeof dash.body.stats.onlineUsers === 'number');
+
+  // --- Chat Rooms (anonymous) ---
+  const room = await makeRequest('POST', '/api/chat-rooms', { name: 'Test Chat Room', description: 'anon room' }, cookies);
+  check('create chat room', room.status === 201);
+  const roomId = room.body.room.id;
+
+  const rooms = await makeRequest('GET', '/api/chat-rooms', null, cookies);
+  check('list chat rooms', rooms.status === 200 && rooms.body.rooms.some(r => r.id === roomId));
+
+  const roomMsgs = await makeRequest('GET', `/api/chat-rooms/${roomId}/messages`, null, cookies);
+  check('fetch chat room messages (auto-join)', roomMsgs.status === 200);
+
+  const roomMsg = await makeRequest('POST', `/api/chat-rooms/${roomId}/messages`, { content: 'anon hello' }, cookies);
+  check('send chat room message', roomMsg.status === 201 && roomMsg.body.message.type === 'user');
+
+  const sentMsgs = await makeRequest('GET', `/api/chat-rooms/${roomId}/messages`, null, cookies);
+  check('chat room stores message', sentMsgs.status === 200 && sentMsgs.body.messages.length >= 1);
+
+  const leaveRoom = await makeRequest('POST', `/api/chat-rooms/${roomId}/leave`, null, cookies);
+  check('leave chat room', leaveRoom.status === 200);
+
   // --- Logout ---
   const logout = await makeRequest('POST', '/api/auth/logout', null, cookies);
   check('logout works', logout.status === 200);

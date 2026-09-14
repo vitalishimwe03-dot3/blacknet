@@ -54,6 +54,23 @@
           <span class="font-mono text-sm">{{ item.label }}</span>
         </router-link>
 
+        <div v-if="channels.length" class="pt-4 pb-2 px-3">
+          <p class="text-[10px] text-bn-muted font-mono uppercase tracking-widest">Channels</p>
+        </div>
+
+        <router-link
+          v-for="ch in joinedChannels"
+          :key="ch.id"
+          :to="`/channels/${ch.id}`"
+          class="sidebar-link"
+          :class="{ active: isActive(`/channels/${ch.id}`) }"
+          @click="sidebarOpen = false"
+        >
+          <span class="text-bn-cyan font-mono text-sm">#</span>
+          <span class="font-mono text-sm truncate">{{ ch.name }}</span>
+          <span class="ml-auto text-[10px] text-bn-muted font-mono">{{ ch.member_count || 0 }}</span>
+        </router-link>
+
         <template v-if="auth.isModerator">
           <div class="pt-4 pb-2 px-3">
             <p class="text-[10px] text-bn-muted font-mono uppercase tracking-widest">Admin</p>
@@ -96,6 +113,12 @@
         </div>
 
         <div class="flex items-center gap-2 ml-4">
+          <!-- Presence -->
+          <span class="hidden md:flex items-center gap-1.5 px-2 py-1 rounded-lg bg-bn-surface/50 border border-bn-border text-[10px] font-mono text-bn-green" title="Users online">
+            <span class="w-1.5 h-1.5 rounded-full bg-bn-green animate-pulse"></span>
+            {{ presence.onlineCount }} online
+          </span>
+
           <!-- Notifications -->
           <button class="relative p-2 rounded-lg hover:bg-bn-surface transition-colors text-bn-muted hover:text-bn-text" @click="toggleNotifications">
             <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
@@ -151,19 +174,24 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useNotificationStore } from '../stores/notifications'
+import { usePresenceStore } from '../stores/presence'
+import { getSocket } from '../utils/socket'
+import api from '../utils/api'
 import { getInitials, timeAgo } from '../utils/helpers'
 
 const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
 const notifications = useNotificationStore()
+const presence = usePresenceStore()
 const sidebarOpen = ref(false)
 const showNotifications = ref(false)
 const searchQuery = ref('')
+const channels = ref([])
 
 const navItems = [
   { to: '/', label: 'Dashboard', icon: '&#9632;' },
@@ -176,6 +204,15 @@ const communityItems = [
   { to: '/forums', label: 'Forums', icon: '&#9776;' },
   { to: '/communities', label: 'Communities', icon: '&#9734;' },
 ]
+
+const joinedChannels = computed(() => channels.value.filter(c => c.is_member || c.created_by === auth.user?.id).slice(0, 8))
+
+async function fetchChannels() {
+  try {
+    const { data } = await api.get('/channels')
+    channels.value = data.channels
+  } catch (e) { console.error(e) }
+}
 
 function isActive(path) {
   if (path === '/') return route.path === '/'
@@ -201,7 +238,10 @@ async function handleLogout() {
 }
 
 onMounted(() => {
+  getSocket()
   notifications.fetchUnreadCount()
+  presence.fetchOnlineUsers()
+  fetchChannels()
   setInterval(() => notifications.fetchUnreadCount(), 30000)
 })
 </script>

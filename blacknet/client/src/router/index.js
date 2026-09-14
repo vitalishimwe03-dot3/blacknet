@@ -30,6 +30,7 @@ const routes = [
       { path: 'communities', name: 'Communities', component: () => import('../views/CommunitiesView.vue') },
       { path: 'communities/:slug', name: 'CommunityDetail', component: () => import('../views/CommunityDetailView.vue') },
       { path: 'chat-rooms', name: 'ChatRooms', component: () => import('../views/ChatRoomsView.vue') },
+      { path: 'chat-rooms/:roomId', name: 'ChatRoom', component: () => import('../views/ChatRoomView.vue') },
       { path: 'settings', name: 'Settings', component: () => import('../views/SettingsView.vue') },
       { path: 'moderation', name: 'Moderation', component: () => import('../views/ModerationView.vue') },
     ]

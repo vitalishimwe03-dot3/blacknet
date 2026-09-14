@@ -75,6 +75,8 @@ app.use('/api/communities', require('./routes/communities'));
 app.use('/api/reports', require('./routes/reports'));
 app.use('/api/moderation', require('./routes/moderation'));
 app.use('/api/notifications', require('./routes/notifications'));
+app.use('/api/chat-rooms', require('./routes/chatRooms'));
+app.use('/api/dashboard', require('./routes/dashboard'));
 
 // Serve Vue app (production build)
 const distPath = path.join(__dirname, '../client/dist');

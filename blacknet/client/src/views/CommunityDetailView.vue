@@ -26,7 +26,7 @@
         <div v-for="m in community?.members" :key="m.id" class="flex items-center gap-3 p-3 rounded-lg bg-bn-surface/30">
           <div class="w-9 h-9 rounded-full bg-bn-surface flex items-center justify-center text-xs font-mono text-bn-accent border border-bn-border relative">
             {{ getInitials(m.display_name || m.username) }}
-            <span class="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-bn-card" :class="m.is_online ? 'bg-bn-green' : 'bg-bn-muted/40'"></span>
+            <span class="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-bn-card" :class="getStatusColor(presence.isOnline(m.id))"></span>
           </div>
           <div class="flex-1">
             <div class="flex items-center gap-2">
@@ -72,12 +72,15 @@
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
-import { getInitials, getRoleBadge } from '../utils/helpers'
+import { usePresenceStore } from '../stores/presence'
+import { getSocket } from '../utils/socket'
+import { getInitials, getRoleBadge, getStatusColor } from '../utils/helpers'
 import api from '../utils/api'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const presence = usePresenceStore()
 const community = ref(null)
 const showInvite = ref(false)
 const inviteForm = ref({ maxUses: 5, expiresInDays: 30 })
@@ -114,7 +117,10 @@ async function removeMember(m) {
   fetchCommunity()
 }
 
-onMounted(fetchCommunity)
+onMounted(() => {
+  getSocket()
+  fetchCommunity()
+})
 </script>
 
 <style scoped>

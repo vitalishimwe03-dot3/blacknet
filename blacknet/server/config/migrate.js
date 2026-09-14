@@ -210,6 +210,37 @@ CREATE TABLE IF NOT EXISTS community_invites (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Anonymous Chat Rooms
+CREATE TABLE IF NOT EXISTS chat_rooms (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name VARCHAR(100) NOT NULL,
+  slug VARCHAR(100) UNIQUE NOT NULL,
+  description TEXT,
+  is_active BOOLEAN DEFAULT true,
+  created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS chat_room_participants (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  room_id UUID REFERENCES chat_rooms(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  anon_name VARCHAR(30) NOT NULL,
+  joined_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  last_seen_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(room_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS chat_room_messages (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  room_id UUID REFERENCES chat_rooms(id) ON DELETE CASCADE,
+  participant_id UUID REFERENCES chat_room_participants(id) ON DELETE CASCADE,
+  type VARCHAR(20) DEFAULT 'user',
+  content TEXT NOT NULL,
+  is_deleted BOOLEAN DEFAULT false,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Reports / Abuse
 CREATE TABLE IF NOT EXISTS reports (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -270,6 +301,8 @@ CREATE INDEX IF NOT EXISTS idx_forum_threads_category ON forum_threads(category_
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, is_read);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_user ON audit_logs(user_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_reports_status ON reports(status);
+CREATE INDEX IF NOT EXISTS idx_chat_room_messages_room ON chat_room_messages(room_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_chat_room_participants_room ON chat_room_participants(room_id, last_seen_at);
 `;
 
 async function migrate() {
