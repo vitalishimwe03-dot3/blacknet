@@ -1,0 +1,31 @@
+{
+  "name": "blacknet-client",
+  "version": "1.0.0",
+  "description": "BlackNet secure community platform - frontend",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "axios": "^1.6.2",
+    "date-fns": "^2.30.0",
+    "dompurify": "^3.0.6",
+    "marked": "^11.0.0",
+    "pinia": "^2.1.7",
+    "socket.io-client": "^4.7.2",
+    "vue": "^3.4.0",
+    "vue-router": "^4.2.5"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^4.5.2",
+    "autoprefixer": "^10.4.16",
+    "postcss": "^8.4.32",
+    "tailwindcss": "^3.3.6",
+    "vite": "^5.0.10"
+  },
+  "allowScripts": {
+    "esbuild@0.19.12": true
+  }
+}
